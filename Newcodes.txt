@@ -245,6 +245,9 @@
     function handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
+        // Clear previous data immediately
+        clearAllData();
+        
         const reader = new FileReader();
         reader.onload = function(e) {
           try {
@@ -253,9 +256,7 @@
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-            Object.keys(contactData).forEach(key => delete contactData[key]);
-            Object.keys(departmentTeamMap).forEach(key => delete departmentTeamMap[key]);
-
+            // Process new data
             jsonData.forEach(row => {
               const department = row.Department || row.department;
               const team = row.Team || row.team;
@@ -283,22 +284,42 @@
               }
             });
 
-            departmentSelect.innerHTML = '<option value="">Select Department</option>';
-            Object.keys(contactData).sort().forEach(dept => {
-              const option = document.createElement('option');
-              option.value = dept;
-              option.textContent = dept.replace(/\b\w/g, c => c.toUpperCase());
-              departmentSelect.appendChild(option);
-            });
-
-            showToast('Excel file loaded successfully!', 'success');
+            // Populate department dropdown
+            populateDepartmentDropdown();
+            
+            showToast(`Excel file loaded successfully! Found ${Object.keys(contactData).length} departments.`, 'success');
           } catch (error) {
             console.error('Error processing file:', error);
             showToast('Error processing the Excel file. Please check the file format.', 'error');
+            clearAllData(); // Clear data on error too
           }
         };
         reader.readAsArrayBuffer(file);
       }
+    }
+
+    function clearAllData() {
+      // Clear all data objects
+      Object.keys(contactData).forEach(key => delete contactData[key]);
+      Object.keys(departmentTeamMap).forEach(key => delete departmentTeamMap[key]);
+      
+      // Reset UI elements
+      departmentSelect.innerHTML = '<option value="">Select Department (Upload Excel file first)</option>';
+      teamSelect.innerHTML = '<option value="">Select Team</option>';
+      teamSelect.disabled = true;
+      contactTableBody.innerHTML = '';
+      contactCount.textContent = '0 contacts found';
+      tableContainer.style.display = 'none';
+    }
+
+    function populateDepartmentDropdown() {
+      departmentSelect.innerHTML = '<option value="">Select Department</option>';
+      Object.keys(contactData).sort().forEach(dept => {
+        const option = document.createElement('option');
+        option.value = dept;
+        option.textContent = dept.replace(/\b\w/g, c => c.toUpperCase());
+        departmentSelect.appendChild(option);
+      });
     }
 
     departmentSelect.addEventListener('change', e => {
@@ -372,6 +393,11 @@
     });
 
     document.getElementById('fileUpload').addEventListener('change', handleFileUpload);
+
+    // Reset file input value on click to allow re-selecting the same file
+    document.getElementById('fileUpload').addEventListener('click', function() {
+      this.value = '';
+    });
 
     // Improved toast notification function
     function showToast(message, type = 'success') {
