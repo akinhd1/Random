@@ -132,6 +132,14 @@
       margin-bottom: 10px;
       color: #64748b;
     }
+    .copy-email {
+      color: #2563eb;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .copy-email:hover {
+      color: #1e40af;
+    }
     @media (max-width: 768px) {
       .filter-row { flex-direction: column; }
     }
@@ -181,166 +189,17 @@
       </table>
     </div>
   </div>
+
   <script>
-    const EXCEL_FILE_PATH = './sample_contacts.xlsx'; // Add your actual Excel file path here
     const departmentSelect = document.getElementById('department');
     const teamSelect = document.getElementById('team');
     const tableContainer = document.getElementById('tableContainer');
     const contactTableBody = document.getElementById('contactTableBody');
     const contactCount = document.getElementById('contactCount');
 
-    const sampleData = [
-      { Department: 'Engineering', Team: 'Frontend', Name: 'Alex Chen', Position: 'Senior Developer', Email: 'alex@company.com' },
-      { Department: 'Engineering', Team: 'Backend', Name: 'Jane Doe', Position: 'Software Engineer', Email: 'jane@company.com' },
-      { Department: 'Engineering', Team: 'Frontend', Name: 'Sarah Wilson', Position: 'UI/UX Developer', Email: 'sarah@company.com' },
-      { Department: 'Engineering', Team: 'Backend', Name: 'Mike Johnson', Position: 'DevOps Engineer', Email: 'mike@company.com' },
-      { Department: 'HR', Team: 'Recruiting', Name: 'John Smith', Position: 'Senior Recruiter', Email: 'john@company.com' },
-      { Department: 'HR', Team: 'Operations', Name: 'Emily Brown', Position: 'HR Manager', Email: 'emily@company.com' },
-      { Department: 'Sales', Team: 'Enterprise', Name: 'David Lee', Position: 'Account Manager', Email: 'david@company.com' },
-      { Department: 'Sales', Team: 'SMB', Name: 'Lisa Garcia', Position: 'Sales Representative', Email: 'lisa@company.com' },
-      { Department: 'Marketing', Team: 'Digital', Name: 'Tom Anderson', Position: 'Marketing Specialist', Email: 'tom@company.com' },
-      { Department: 'Marketing', Team: 'Content', Name: 'Amy Taylor', Position: 'Content Manager', Email: 'amy@company.com' }
-    ];
-
     const contactData = {};
     const departmentTeamMap = {};
 
-    // Process sample data
-    sampleData.forEach(({ Department, Team, Name, Position, Email }) => {
-      const dept = Department.toLowerCase();
-      const team = Team.toLowerCase();
-
-      if (!contactData[dept]) {
-        contactData[dept] = {};
-        departmentTeamMap[dept] = [];
-      }
-      if (!contactData[dept][team]) {
-        contactData[dept][team] = [];
-        departmentTeamMap[dept].push({ value: team, label: Team });
-      }
-      contactData[dept][team].push({ name: Name, position: Position, email: Email });
-    });
-
-    // Populate department dropdown
-    Object.keys(contactData).forEach(dept => {
-      const option = document.createElement('option');
-      option.value = dept;
-      option.textContent = dept.charAt(0).toUpperCase() + dept.slice(1);
-      departmentSelect.appendChild(option);
-    });
-
-    // Department change handler
-    departmentSelect.addEventListener('change', e => {
-      const dept = e.target.value;
-      teamSelect.innerHTML = '<option value="">Select Team</option>';
-      
-      if (dept && departmentTeamMap[dept]) {
-        departmentTeamMap[dept].forEach(({ value, label }) => {
-          const opt = document.createElement('option');
-          opt.value = value;
-          opt.textContent = label;
-          teamSelect.appendChild(opt);
-        });
-        teamSelect.disabled = false;
-      } else {
-        teamSelect.disabled = true;
-      }
-      
-      tableContainer.style.display = 'none';
-    });
-
-    // Team change handler
-    teamSelect.addEventListener('change', e => {
-      const dept = departmentSelect.value;
-      const team = e.target.value;
-      
-      if (dept && team && contactData[dept] && contactData[dept][team]) {
-        const records = contactData[dept][team];
-        contactTableBody.innerHTML = '';
-        
-        records.forEach(({ name, position, email }) => {
-          const row = document.createElement('tr');
-          row.innerHTML = `<td>${name}</td><td>${position}</td><td>${email}</td>`;
-          contactTableBody.appendChild(row);
-        });
-        
-        contactCount.textContent = `${records.length} contacts found`;
-        tableContainer.style.display = 'block';
-      } else {
-        tableContainer.style.display = 'none';
-      }
-    });
-
-    // Function to load Excel file
-    async function loadExcelFile(filePath) {
-      try {
-        console.log('Attempting to load Excel file:', filePath);
-        const response = await fetch(filePath);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const arrayBuffer = await response.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(worksheet);
-        
-        console.log('Excel data loaded:', data);
-        
-        if (data.length > 0) {
-          // Clear existing data
-          Object.keys(contactData).forEach(key => delete contactData[key]);
-          Object.keys(departmentTeamMap).forEach(key => delete departmentTeamMap[key]);
-          
-          // Process Excel data
-          data.forEach(row => {
-            const department = row.Department || row.department;
-            const team = row.Team || row.team;
-            const name = row.Name || row.name;
-            const position = row.Position || row.position;
-            const email = row.Email || row.email;
-            
-            if (department && team && name) {
-              const dept = department.toLowerCase();
-              const teamLower = team.toLowerCase();
-
-              if (!contactData[dept]) {
-                contactData[dept] = {};
-                departmentTeamMap[dept] = [];
-              }
-              if (!contactData[dept][teamLower]) {
-                contactData[dept][teamLower] = [];
-                departmentTeamMap[dept].push({ value: teamLower, label: team });
-              }
-              contactData[dept][teamLower].push({ 
-                name: name, 
-                position: position || 'N/A', 
-                email: email || 'N/A' 
-              });
-            }
-          });
-          
-          // Rebuild department dropdown
-          departmentSelect.innerHTML = '<option value="">Select Department</option>';
-          Object.keys(contactData).forEach(dept => {
-            const option = document.createElement('option');
-            option.value = dept;
-            option.textContent = dept.charAt(0).toUpperCase() + dept.slice(1);
-            departmentSelect.appendChild(option);
-          });
-          
-          console.log('Excel data processed successfully');
-        }
-        
-      } catch (error) {
-        console.error('Error loading Excel file:', error);
-        console.log('Using sample data instead');
-        alert('Could not load Excel file. Please check the file path and ensure the file is accessible. Using sample data instead.');
-      }
-    }
-
-    // Function to handle file upload
     function handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
@@ -351,21 +210,17 @@
             const workbook = XLSX.read(data, { type: 'array' });
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            
-            console.log('File upload data:', jsonData);
-            
-            // Clear existing data
+
             Object.keys(contactData).forEach(key => delete contactData[key]);
             Object.keys(departmentTeamMap).forEach(key => delete departmentTeamMap[key]);
-            
-            // Process uploaded data
+
             jsonData.forEach(row => {
               const department = row.Department || row.department;
               const team = row.Team || row.team;
               const name = row.Name || row.name;
               const position = row.Position || row.position;
               const email = row.Email || row.email;
-              
+
               if (department && team && name) {
                 const dept = department.toLowerCase();
                 const teamLower = team.toLowerCase();
@@ -378,25 +233,23 @@
                   contactData[dept][teamLower] = [];
                   departmentTeamMap[dept].push({ value: teamLower, label: team });
                 }
-                contactData[dept][teamLower].push({ 
-                  name: name, 
-                  position: position || 'N/A', 
-                  email: email || 'N/A' 
+                contactData[dept][teamLower].push({
+                  name: name,
+                  position: position || 'N/A',
+                  email: email || 'N/A'
                 });
               }
             });
-            
-            // Rebuild department dropdown
+
             departmentSelect.innerHTML = '<option value="">Select Department</option>';
-            Object.keys(contactData).forEach(dept => {
+            Object.keys(contactData).sort().forEach(dept => {
               const option = document.createElement('option');
               option.value = dept;
-              option.textContent = dept.charAt(0).toUpperCase() + dept.slice(1);
+              option.textContent = dept.replace(/\b\w/g, c => c.toUpperCase());
               departmentSelect.appendChild(option);
             });
-            
+
             alert('Excel file loaded successfully!');
-            
           } catch (error) {
             console.error('Error processing file:', error);
             alert('Error processing the Excel file. Please check the file format.');
@@ -406,12 +259,89 @@
       }
     }
 
-    // Add file upload event listener
+    departmentSelect.addEventListener('change', e => {
+      const dept = e.target.value;
+      teamSelect.innerHTML = '<option value="">Select Team</option>';
+      contactTableBody.innerHTML = '';
+      contactCount.textContent = '0 contacts found';
+      tableContainer.style.display = 'none';
+
+      if (dept && departmentTeamMap[dept]) {
+        departmentTeamMap[dept].sort((a, b) => a.label.localeCompare(b.label)).forEach(({ value, label }) => {
+          const opt = document.createElement('option');
+          opt.value = value;
+          opt.textContent = label;
+          teamSelect.appendChild(opt);
+        });
+        teamSelect.disabled = false;
+      } else {
+        teamSelect.disabled = true;
+      }
+    });
+
+    teamSelect.addEventListener('change', e => {
+      const dept = departmentSelect.value;
+      const team = e.target.value;
+
+      if (dept && team && contactData[dept] && contactData[dept][team]) {
+        const records = contactData[dept][team];
+        contactTableBody.innerHTML = '';
+
+        records.forEach(({ name, position, email }) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${name}</td>
+            <td>${position}</td>
+            <td><span class="copy-email" data-email="${email}" title="Click to copy">${email}</span></td>
+          `;
+          contactTableBody.appendChild(row);
+        });
+
+        contactCount.textContent = `${records.length} contacts found`;
+        tableContainer.style.display = 'block';
+
+        document.querySelectorAll('.copy-email').forEach(span => {
+          span.addEventListener('click', (e) => {
+            const email = e.currentTarget.getAttribute('data-email');
+            navigator.clipboard.writeText(email)
+              .then(() => showCopiedMessage(e.currentTarget))
+              .catch(err => console.error('Clipboard copy failed', err));
+          });
+        });
+
+      } else {
+        tableContainer.style.display = 'none';
+      }
+    });
+
     document.getElementById('fileUpload').addEventListener('change', handleFileUpload);
 
-    // Only try to load Excel file if running on a server (not file://)
-    if (window.location.protocol !== 'file:') {
-      loadExcelFile(EXCEL_FILE_PATH);
+    function showCopiedMessage(targetElement) {
+      const tooltip = document.createElement('div');
+      tooltip.textContent = 'Email copied!';
+      tooltip.style.position = 'absolute';
+      tooltip.style.background = '#1e3a8a';
+      tooltip.style.color = '#fff';
+      tooltip.style.padding = '4px 8px';
+      tooltip.style.borderRadius = '6px';
+      tooltip.style.fontSize = '0.85rem';
+      tooltip.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+      tooltip.style.zIndex = 1000;
+      tooltip.style.transition = 'opacity 0.3s ease';
+      tooltip.style.opacity = 0;
+
+      document.body.appendChild(tooltip);
+
+      const rect = targetElement.getBoundingClientRect();
+      tooltip.style.left = `${rect.left + window.scrollX + rect.width / 2 - 50}px`;
+      tooltip.style.top = `${rect.top + window.scrollY - 30}px`;
+
+      requestAnimationFrame(() => tooltip.style.opacity = 1);
+
+      setTimeout(() => {
+        tooltip.style.opacity = 0;
+        setTimeout(() => document.body.removeChild(tooltip), 300);
+      }, 1200);
     }
   </script>
 </body>
