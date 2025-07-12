@@ -138,9 +138,17 @@
       cursor: pointer;
       text-decoration: underline;
       position: relative;
+      outline: none;
+      padding: 2px 4px;
+      border-radius: 4px;
     }
     .copy-email:hover {
       color: #1e40af;
+      background-color: #f0f9ff;
+    }
+    .copy-email:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
     }
     
     /* Toast notification styles */
@@ -159,6 +167,8 @@
       transform: translateX(100%);
       transition: transform 0.3s ease, opacity 0.3s ease;
       opacity: 0;
+      max-width: 350px;
+      word-wrap: break-word;
     }
     
     .toast.show {
@@ -169,6 +179,31 @@
     .toast.hide {
       transform: translateX(100%);
       opacity: 0;
+    }
+    
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 8px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
     
     @media (max-width: 768px) {
@@ -194,6 +229,15 @@
       <p>Find and manage your contact list</p>
       <div class="creator">created by Anil</div>
     </div>
+  
+  <!-- Fixed toast container with proper ARIA attributes -->
+  <div id="toastContainer" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+  
+  <!-- Loading indicator -->
+  <div id="loadingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.9); padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10001;">
+    <div class="loading-spinner"></div>
+    Processing Excel file...
+  </div>
     <div class="filters">
       <div class="filter-row">
         <div class="filter-group">
@@ -241,10 +285,20 @@
 
     const contactData = {};
     const departmentTeamMap = {};
+    const originalCasing = {}; // Store original casing for departments and teams
 
     function handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
+        // Validate file type
+        if (!file.name.match(/\.(xlsx|xls)$/i)) {
+          showToast('Please select a valid Excel file (.xlsx or .xls)', 'error');
+          return;
+        }
+
+        // Show loading indicator
+        document.getElementById('loadingIndicator').style.display = 'block';
+        
         // Clear previous data immediately
         clearAllData();
         
@@ -256,52 +310,147 @@
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-            // Process new data
-            jsonData.forEach(row => {
-              const department = row.Department || row.department;
-              const team = row.Team || row.team;
-              const name = row.Name || row.name;
-              const position = row.Position || row.position;
-              const email = row.Email || row.email;
+            // Validate file structure
+            const validationResult = validateFileStructure(jsonData);
+            if (!validationResult.isValid) {
+              document.getElementById('loadingIndicator').style.display = 'none';
+              showToast(`File validation failed: ${validationResult.error}`, 'error');
+              return;
+            }
 
-              if (department && team && name) {
-                const dept = department.toLowerCase();
-                const teamLower = team.toLowerCase();
-
-                if (!contactData[dept]) {
-                  contactData[dept] = {};
-                  departmentTeamMap[dept] = [];
-                }
-                if (!contactData[dept][teamLower]) {
-                  contactData[dept][teamLower] = [];
-                  departmentTeamMap[dept].push({ value: teamLower, label: team });
-                }
-                contactData[dept][teamLower].push({
-                  name: name,
-                  position: position || 'N/A',
-                  email: email || 'N/A'
-                });
-              }
-            });
-
+            // Process data with performance optimization
+            processExcelData(jsonData);
+            
+            // Hide loading indicator
+            document.getElementById('loadingIndicator').style.display = 'none';
+            
             // Populate department dropdown
             populateDepartmentDropdown();
             
-            showToast(`Excel file loaded successfully! Found ${Object.keys(contactData).length} departments.`, 'success');
+            const deptCount = Object.keys(contactData).length;
+            const totalContacts = Object.values(contactData).reduce((total, dept) => {
+              return total + Object.values(dept).reduce((deptTotal, team) => deptTotal + team.length, 0);
+            }, 0);
+            
+            showToast(`Excel file loaded successfully! Found ${deptCount} departments with ${totalContacts} contacts.`, 'success');
           } catch (error) {
             console.error('Error processing file:', error);
-            showToast('Error processing the Excel file. Please check the file format.', 'error');
-            clearAllData(); // Clear data on error too
+            document.getElementById('loadingIndicator').style.display = 'none';
+            showToast(`Error processing Excel file: ${error.message}. Please check the file format.`, 'error');
+            clearAllData();
           }
         };
+        
+        reader.onerror = function() {
+          document.getElementById('loadingIndicator').style.display = 'none';
+          showToast('Failed to read the file. Please try again.', 'error');
+        };
+        
         reader.readAsArrayBuffer(file);
       }
+    }
+
+    function validateFileStructure(jsonData) {
+      if (!jsonData || jsonData.length === 0) {
+        return { isValid: false, error: 'File is empty or contains no data' };
+      }
+
+      const firstRow = jsonData[0];
+      const requiredColumns = ['Department', 'Team', 'Name'];
+      const availableColumns = Object.keys(firstRow);
+      
+      // Check for required columns (case-insensitive)
+      const missingColumns = requiredColumns.filter(col => 
+        !availableColumns.some(availCol => availCol.toLowerCase() === col.toLowerCase())
+      );
+      
+      if (missingColumns.length > 0) {
+        return { 
+          isValid: false, 
+          error: `Missing required columns: ${missingColumns.join(', ')}. Available columns: ${availableColumns.join(', ')}` 
+        };
+      }
+
+      // Check if there are any valid rows
+      const validRows = jsonData.filter(row => {
+        const dept = row.Department || row.department;
+        const team = row.Team || row.team;
+        const name = row.Name || row.name;
+        return dept && team && name;
+      });
+
+      if (validRows.length === 0) {
+        return { 
+          isValid: false, 
+          error: 'No valid rows found. Please ensure Department, Team, and Name columns have data.' 
+        };
+      }
+
+      return { isValid: true, validRows: validRows.length, totalRows: jsonData.length };
+    }
+
+    function processExcelData(jsonData) {
+      // Use requestAnimationFrame for better performance with large files
+      const batchSize = 100;
+      let currentIndex = 0;
+      
+      function processBatch() {
+        const endIndex = Math.min(currentIndex + batchSize, jsonData.length);
+        
+        for (let i = currentIndex; i < endIndex; i++) {
+          const row = jsonData[i];
+          const department = row.Department || row.department;
+          const team = row.Team || row.team;
+          const name = row.Name || row.name;
+          const position = row.Position || row.position;
+          const email = row.Email || row.email;
+
+          if (department && team && name) {
+            const dept = department.toString().toLowerCase();
+            const teamLower = team.toString().toLowerCase();
+
+            // Store original casing
+            if (!originalCasing[dept]) {
+              originalCasing[dept] = { 
+                department: department.toString(),
+                teams: {}
+              };
+            }
+            if (!originalCasing[dept].teams[teamLower]) {
+              originalCasing[dept].teams[teamLower] = team.toString();
+            }
+
+            if (!contactData[dept]) {
+              contactData[dept] = {};
+              departmentTeamMap[dept] = [];
+            }
+            if (!contactData[dept][teamLower]) {
+              contactData[dept][teamLower] = [];
+              departmentTeamMap[dept].push({ value: teamLower, label: team.toString() });
+            }
+            contactData[dept][teamLower].push({
+              name: name.toString(),
+              position: position ? position.toString() : 'N/A',
+              email: email ? email.toString() : 'N/A'
+            });
+          }
+        }
+        
+        currentIndex = endIndex;
+        
+        if (currentIndex < jsonData.length) {
+          requestAnimationFrame(processBatch);
+        }
+      }
+      
+      processBatch();
     }
 
     function clearAllData() {
       // Clear all data objects
       Object.keys(contactData).forEach(key => delete contactData[key]);
       Object.keys(departmentTeamMap).forEach(key => delete departmentTeamMap[key]);
+      Object.keys(originalCasing).forEach(key => delete originalCasing[key]);
       
       // Reset UI elements
       departmentSelect.innerHTML = '<option value="">Select Department (Upload Excel file first)</option>';
@@ -317,7 +466,8 @@
       Object.keys(contactData).sort().forEach(dept => {
         const option = document.createElement('option');
         option.value = dept;
-        option.textContent = dept.replace(/\b\w/g, c => c.toUpperCase());
+        // Use original casing instead of simple capitalization
+        option.textContent = originalCasing[dept] ? originalCasing[dept].department : dept;
         departmentSelect.appendChild(option);
       });
     }
@@ -333,7 +483,10 @@
         departmentTeamMap[dept].sort((a, b) => a.label.localeCompare(b.label)).forEach(({ value, label }) => {
           const opt = document.createElement('option');
           opt.value = value;
-          opt.textContent = label;
+          // Use original casing for team names too
+          opt.textContent = originalCasing[dept] && originalCasing[dept].teams[value] 
+            ? originalCasing[dept].teams[value] 
+            : label;
           teamSelect.appendChild(opt);
         });
         teamSelect.disabled = false;
@@ -355,7 +508,16 @@
           row.innerHTML = `
             <td>${name}</td>
             <td>${position}</td>
-            <td><span class="copy-email" data-email="${email}" title="Click to copy">${email}</span></td>
+            <td>
+              <span class="copy-email" 
+                    data-email="${email}" 
+                    title="Click to copy email address"
+                    role="button"
+                    tabindex="0"
+                    aria-label="Copy email address ${email}"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+              >${email}</span>
+            </td>
           `;
           contactTableBody.appendChild(row);
         });
@@ -399,33 +561,33 @@
       this.value = '';
     });
 
-    // Improved toast notification function
+    // Fixed toast notification function with proper ARIA handling
     function showToast(message, type = 'success') {
-      // Remove any existing toast
-      const existingToast = document.querySelector('.toast');
-      if (existingToast) {
-        existingToast.remove();
-      }
-
+      const toastContainer = document.getElementById('toastContainer');
+      
       const toast = document.createElement('div');
       toast.className = 'toast';
       toast.textContent = message;
+      // Remove conflicting ARIA attributes - let the container handle announcements
       
       // Set color based on type
       if (type === 'error') {
         toast.style.background = '#ef4444';
       } else if (type === 'success') {
         toast.style.background = '#10b981';
+      } else if (type === 'warning') {
+        toast.style.background = '#f59e0b';
       }
       
-      document.body.appendChild(toast);
+      toastContainer.appendChild(toast);
 
       // Trigger animation
       setTimeout(() => {
         toast.classList.add('show');
       }, 10);
 
-      // Hide after 3 seconds
+      // Auto-remove after 4 seconds (longer for error messages)
+      const duration = type === 'error' ? 6000 : 4000;
       setTimeout(() => {
         toast.classList.remove('show');
         toast.classList.add('hide');
@@ -436,29 +598,45 @@
             toast.parentNode.removeChild(toast);
           }
         }, 300);
-      }, 3000);
+      }, duration);
     }
 
-    // Fallback copy method for older browsers
+    // Complete fallback copy method for older browsers
     function copyToClipboardFallback(text) {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      
       try {
-        document.execCommand('copy');
-        showToast('Email copied to clipboard!', 'success');
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        
+        // Make the textarea invisible and non-interactive
+        textArea.style.position = 'fixed';
+        textArea.style.top = '-9999px';
+        textArea.style.left = '-9999px';
+        textArea.style.opacity = '0';
+        textArea.style.pointerEvents = 'none';
+        textArea.style.tabIndex = '-1';
+        textArea.setAttribute('readonly', '');
+        textArea.setAttribute('aria-hidden', 'true');
+        
+        document.body.appendChild(textArea);
+        
+        // Select and copy the text
+        textArea.select();
+        textArea.setSelectionRange(0, 99999); // For mobile devices
+        
+        const successful = document.execCommand('copy');
+        
+        // Clean up
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          showToast('Email copied to clipboard!', 'success');
+        } else {
+          showToast('Failed to copy email. Please copy manually.', 'error');
+        }
       } catch (err) {
         console.error('Fallback copy failed:', err);
-        showToast('Copy failed. Please manually copy the email.', 'error');
+        showToast('Failed to copy email. Please copy manually.', 'error');
       }
-      
-      document.body.removeChild(textArea);
     }
   </script>
 </body>
