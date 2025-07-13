@@ -142,7 +142,10 @@
 
                     const { contactData, departmentTeamMap, originalCasing } = processExcelData(jsonData);
 
-                    const generatedHtml = createFinalHtml(contactData, departmentTeamMap, originalCasing);
+                    // --- MODIFICATION START ---
+                    const pageTitle = generateTitleFromFileName(outputFileName); // ADDED: Generate a clean title
+                    const generatedHtml = createFinalHtml(contactData, departmentTeamMap, originalCasing, pageTitle); // MODIFIED: Pass title to function
+                    // --- MODIFICATION END ---
                     
                     downloadFile(generatedHtml, outputFileName);
                     
@@ -160,6 +163,16 @@
                 generateBtn.disabled = false;
             };
             reader.readAsArrayBuffer(file);
+        }
+
+        // ADDED: New function to create a clean title from the file name
+        function generateTitleFromFileName(fileName) {
+            // Remove .html or .htm extension
+            let title = fileName.toLowerCase().replace(/\.html?$/, '');
+            // Replace hyphens and underscores with spaces
+            title = title.replace(/[-_]/g, ' ');
+            // Capitalize the first letter of each word
+            return title.replace(/\b\w/g, char => char.toUpperCase());
         }
 
         function processExcelData(jsonData) {
@@ -235,19 +248,18 @@
             }, 4000);
         }
 
-        function createFinalHtml(contactData, departmentTeamMap, originalCasing) {
+        // MODIFIED: Function now accepts a 'title' parameter
+        function createFinalHtml(contactData, departmentTeamMap, originalCasing, title) {
             const contactDataString = JSON.stringify(contactData, null, 2);
             const departmentTeamMapString = JSON.stringify(departmentTeamMap, null, 2);
             const originalCasingString = JSON.stringify(originalCasing, null, 2);
 
-            // Using a template literal to build the final HTML string
             return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GPDM Contact Directory</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <title>${title}</title> <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; position: relative; }
@@ -284,8 +296,7 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>GPDM Contact Directory</h1>
-      <p>Find and manage your contact list</p>
+      <h1>${title}</h1> <p>Find and manage your contact list</p>
       <div class="creator">created by Anil</div>
     </div>
     <div id="toastContainer" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
@@ -312,17 +323,14 @@
     </div>
   </div>
   <script>
-    // Data is embedded directly from the generator
     const contactData = ${contactDataString};
     const departmentTeamMap = ${departmentTeamMapString};
     const originalCasing = ${originalCasingString};
-    
     const departmentSelect = document.getElementById('department');
     const teamSelect = document.getElementById('team');
     const tableContainer = document.getElementById('tableContainer');
     const contactTableBody = document.getElementById('contactTableBody');
     const contactCount = document.getElementById('contactCount');
-
     document.addEventListener('DOMContentLoaded', () => {
         populateDepartmentDropdown();
         const totalContacts = Object.values(contactData).reduce((total, dept) => {
@@ -332,7 +340,6 @@
             showToast(\`Contact list loaded with \${totalContacts} contacts.\`, 'success');
         }
     });
-
     function populateDepartmentDropdown() {
       departmentSelect.innerHTML = '<option value="">Select Department</option>';
       Object.keys(contactData).sort().forEach(dept => {
@@ -342,14 +349,12 @@
         departmentSelect.appendChild(option);
       });
     }
-
     departmentSelect.addEventListener('change', e => {
       const dept = e.target.value;
       teamSelect.innerHTML = '<option value="">Select Team</option>';
       contactTableBody.innerHTML = '';
       contactCount.textContent = '0 contacts found';
       tableContainer.style.display = 'none';
-
       if (dept && departmentTeamMap[dept]) {
         departmentTeamMap[dept].sort((a, b) => a.label.localeCompare(b.label)).forEach(({ value, label }) => {
           const opt = document.createElement('option');
@@ -362,24 +367,19 @@
         teamSelect.disabled = true;
       }
     });
-
     teamSelect.addEventListener('change', e => {
       const dept = departmentSelect.value;
       const team = e.target.value;
-
       if (dept && team && contactData[dept] && contactData[dept][team]) {
         const records = contactData[dept][team];
         contactTableBody.innerHTML = '';
-
         records.forEach(({ name, position, email }) => {
           const row = document.createElement('tr');
           row.innerHTML = \`<td>\${name}</td><td>\${position}</td><td><span class="copy-email" data-email="\${email}" title="Click to copy email" role="button" tabindex="0">\${email}</span></td>\`;
           contactTableBody.appendChild(row);
         });
-
         contactCount.textContent = \`\${records.length} contacts found\`;
         tableContainer.style.display = 'block';
-
         document.querySelectorAll('.copy-email').forEach(span => {
           span.addEventListener('click', (e) => {
             copyEmail(e.currentTarget.getAttribute('data-email'));
@@ -389,7 +389,6 @@
         tableContainer.style.display = 'none';
       }
     });
-
     function copyEmail(email) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(email).then(() => {
@@ -401,7 +400,6 @@
             copyToClipboardFallback(email);
         }
     }
-
     function copyToClipboardFallback(text) {
       try {
         const textArea = document.createElement('textarea');
@@ -419,7 +417,6 @@
         showToast('Failed to copy email.', 'error');
       }
     }
-
     function showToast(message, type = 'success') {
       const toastContainer = document.getElementById('toastContainer');
       const toast = document.createElement('div');
