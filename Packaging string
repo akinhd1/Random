@@ -1,0 +1,136 @@
+Sub AddFormulaBasedOnColumnE()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim eValue As Variant
+    Dim dataRange As Range
+    Dim startTime As Double
+    
+    ' Performance optimization: Turn off screen updating and calculations
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    
+    startTime = Timer
+    
+    Set ws = ActiveSheet
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Validate that we have data to process
+    If lastRow < 2 Then
+        MsgBox "No data found to process.", vbExclamation, "No Data"
+        GoTo CleanUp
+    End If
+    
+    ' Process columns B, C, and D
+    For i = 2 To lastRow
+        ' Fill column B based on column F
+        If ws.Cells(i, 6).Value <> "" Then
+            ws.Cells(i, 2).Value = ws.Cells(i, 1).Value
+        Else
+            If i > 2 Then
+                ws.Cells(i, 2).Value = ws.Cells(i - 1, 2).Value
+            End If
+        End If
+
+        ' Generate sequential counter in column C
+        If i > 3 Then
+            ws.Cells(i, 3).Formula = "=IF(B" & i & "=B" & i - 1 & ",C" & i - 1 & "+1,1)"
+        Else
+            ws.Cells(i, 3).Value = 1
+        End If
+
+        ' Process column D based on column E value
+        eValue = ws.Cells(i, 5).Value
+        If IsNumeric(eValue) Then
+            eValue = CInt(eValue)
+        Else
+            eValue = 0
+        End If
+
+        Select Case eValue
+            Case 1
+                If i > 2 Then
+                    ws.Cells(i, 4).Formula = "=CONCATENATE(C" & i & ",B" & i - 1 & ",""/"",B" & i & ")"
+                End If
+            Case 2
+                If i > 3 Then
+                    ws.Cells(i, 4).Formula = "=CONCATENATE(C" & i & ",B" & i - 2 & ",""/"",B" & i - 1 & ",""/"",B" & i & ")"
+                End If
+            Case Else
+                ws.Cells(i, 4).Formula = "=CONCATENATE(C" & i & ",""/"",B" & i & ")"
+        End Select
+    Next i
+    
+    ' Clear target columns (excluding header row)
+    If lastRow > 1 Then
+        ws.Range("F2:F" & lastRow).ClearContents
+        ws.Range("M2:O" & lastRow).ClearContents
+    End If
+    
+    ' Get prefix and suffix values with error checking
+    Dim prefix As String, suffix As String
+    prefix = IIf(IsEmpty(ws.Cells(8, 9).Value), "", CStr(ws.Cells(8, 9).Value))
+    suffix = IIf(IsEmpty(ws.Cells(10, 9).Value), "", CStr(ws.Cells(10, 9).Value))
+    
+    ' Process M and N columns
+    Dim destRow As Long
+    destRow = 2
+    
+    ' Store mapping for duplicate checking
+    Dim rowMap As Collection
+    Set rowMap = New Collection
+    
+    ' First pass: Populate M and N columns
+    For i = 2 To lastRow
+        If ws.Cells(i, 6).Value <> "" Then
+            ws.Cells(destRow, 13).Value = ws.Cells(i, 1).Value ' Column M
+            ws.Cells(destRow, 14).Value = prefix & ws.Cells(i, 6).Value & suffix ' Column N
+            
+            ' Store mapping for duplicate checking
+            On Error Resume Next
+            rowMap.Add Array(i, ws.Cells(i, 6).Value, ws.Cells(i, 1).Value), CStr(destRow)
+            On Error GoTo 0
+            
+            destRow = destRow + 1
+        End If
+    Next i
+    
+    ' Second pass: Check for duplicates in column U and mark with "X" in column O
+    Dim duplicateValues As Collection
+    Set duplicateValues = New Collection
+    
+    ' Collect all values from column U
+    For i = 2 To lastRow
+        If ws.Cells(i, 21).Value <> "" Then
+            On Error Resume Next
+            duplicateValues.Add ws.Cells(i, 21).Value, CStr(ws.Cells(i, 21).Value)
+            If Err.Number = 457 Then ' Duplicate key error means we found a duplicate
+                ' Mark corresponding rows in column O
+                MarkDuplicateRows ws, ws.Cells(i, 1).Value, destRow - 1
+                Err.Clear
+            End If
+            On Error GoTo 0
+        End If
+    Next i
+    
+CleanUp:
+    ' Restore Excel settings
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    
+    Dim executionTime As Double
+    executionTime = Timer - startTime
+    
+    MsgBox "Packaging string has been updated." & vbCrLf & _
+           "Execution time: " & Format(executionTime, "0.00") & " seconds", _
+           vbInformation, "Execution Complete"
+End Sub
+
+Private Sub MarkDuplicateRows(ws As Worksheet, targetValue As String, maxRow As Long)
+    Dim i As Long
+    For i = 2 To maxRow
+        If ws.Cells(i, 13).Value = targetValue Then
+            ws.Cells(i, 15).Value = "X"
+        End If
+    Next i
+End Sub
