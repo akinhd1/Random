@@ -1,39 +1,18 @@
-Subject: FY26 Transfer Price Roll – Completion Update & Key Observations
+The integration flow between TPM and S/4HANA for supplier master data is designed to prevent the transmission of changes or updates for suppliers that are either blocked or marked for deletion. If such data is processed, it results in errors during synchronization with S/4.
 
-Dear [Manager's Name / Team],
+To ensure smooth data flow and prevent processing errors, the following approach should be followed:
 
-I would like to share an update on the FY26 Transfer Price Roll activity.
-
-We successfully completed the transfer price loading for over 2,20,000 materials, covering more than 3,32,000 pricing conditions. Additionally, we processed 5.8 million+ ZSMD (Self-Manufactured Acquisition Cost) conditions as part of this effort.
-
-Transfer price loading began on June 17th upon receiving confirmation and was completed by June 28th.
-
-ZSMD condition loading, due to program inefficiency and the large volume, was completed on July 7th.
+1. Pre-Check: Before initiating any changes to supplier master data in TPM, verify whether the supplier is currently blocked or marked for deletion.
 
 
-Key Challenges Encountered:
-
-1. ZSMD Program Inefficiency:
-We've been collaborating with IT over the past 10 months to improve performance. However, we are still awaiting an optimal resolution.
+2. Unblock/Remove Deletion Flag: If the supplier is blocked or marked for deletion, first remove the block or deletion indicator.
 
 
-2. TPM Upload Limitation:
-The TPM upload program can currently process only 25,000 records per transaction, significantly increasing upload cycles and monitoring overhead.
+3. Process and Save Changes: Once unblocked, proceed with the intended changes or updates to the supplier data and save them.
 
 
-3. Validation Extract Constraints:
-TPM validation reports are restricted to a single company code per execution, which affects efficiency when working across multiple company codes.
+4. Reapply Block/Deletion (if required): If the supplier still needs to be blocked or marked for deletion, apply the flag after the changes have been successfully processed and saved.
 
 
 
-Next Steps:
-
-Continue coordination with IT to resolve the ZSMD program performance issue.
-
-Take up the TPM upload and validation extract limitations with IT and business stakeholders, aiming for enhancements before the next financial year cycle.
-
-
-Please let me know if you'd like a more detailed walkthrough of the current gaps and the improvement roadmap we’re proposing.
-
-Best regards,
-Anil Kumar
+This sequence ensures data integrity and avoids errors during the synchronization process between TPM and S/4.
