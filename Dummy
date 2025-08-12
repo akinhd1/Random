@@ -1,18 +1,62 @@
-The integration flow between TPM and S/4HANA for supplier master data is designed to prevent the transmission of changes or updates for suppliers that are either blocked or marked for deletion. If such data is processed, it results in errors during synchronization with S/4.
+Option Explicit
 
-To ensure smooth data flow and prevent processing errors, the following approach should be followed:
-
-1. Pre-Check: Before initiating any changes to supplier master data in TPM, verify whether the supplier is currently blocked or marked for deletion.
-
-
-2. Unblock/Remove Deletion Flag: If the supplier is blocked or marked for deletion, first remove the block or deletion indicator.
-
-
-3. Process and Save Changes: Once unblocked, proceed with the intended changes or updates to the supplier data and save them.
-
-
-4. Reapply Block/Deletion (if required): If the supplier still needs to be blocked or marked for deletion, apply the flag after the changes have been successfully processed and saved.
-
-
-
-This sequence ensures data integrity and avoids errors during the synchronization process between TPM and S/4.
+Sub UpdateSAP_FromExcel()
+    Dim SapGuiAuto As Object
+    Dim SAPApp As Object
+    Dim SAPCon As Object
+    Dim session As Object
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim lastRow As Long
+    Dim vkorg As String, kunag As String, matnr As String
+    
+    ' Set your data sheet
+    Set ws = ThisWorkbook.Sheets("Sheet1")
+    
+    ' Find last row in Column A
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Connect to SAP
+    On Error Resume Next
+    Set SapGuiAuto = GetObject("SAPGUI")
+    If SapGuiAuto Is Nothing Then
+        MsgBox "Please make sure SAP is open and you are logged in."
+        Exit Sub
+    End If
+    On Error GoTo 0
+    
+    Set SAPApp = SapGuiAuto.GetScriptingEngine
+    Set SAPCon = SAPApp.Children(0)
+    Set session = SAPCon.Children(0)
+    
+    ' Loop through each row
+    For i = 2 To lastRow ' Row 1 is header
+        vkorg = ws.Cells(i, "A").Value
+        kunag = ws.Cells(i, "B").Value
+        matnr = ws.Cells(i, "C").Value
+        
+        If vkorg = "" Or kunag = "" Or matnr = "" Then Exit For
+        
+        ' --- SAP Actions ---
+        session.findById("wnd[0]").resizeWorkingPane 185, 35, False
+        session.findById("wnd[0]/usr/ctxtKOMGK-VKORG").Text = vkorg
+        session.findById("wnd[0]/usr/ctxtKOMGK-KUNAG").Text = kunag
+        session.findById("wnd[0]/usr/ctxtKOMGK-KUNAG").SetFocus
+        session.findById("wnd[0]/usr/ctxtKOMGK-KUNAG").caretPosition = Len(kunag)
+        session.findById("wnd[0]").sendVKey 0
+        
+        session.findById("wnd[0]/usr/tblSAPMV13GCTRL_FAST_ENTRY/ctxtKOMGK-MATNR[0,0]").Text = matnr
+        session.findById("wnd[0]/usr/tblSAPMV13GCTRL_FAST_ENTRY/ctxtKOMGK-MATNR[0,0]").SetFocus
+        session.findById("wnd[0]/usr/tblSAPMV13GCTRL_FAST_ENTRY/ctxtKOMGK-MATNR[0,0]").caretPosition = Len(matnr)
+        
+        session.findById("wnd[0]").sendVKey 0
+        
+        ' Save - adjust this if your save button/menu differs
+        session.findById("wnd[0]/mbar/menu[0]/menu[1]").Select
+        
+        ' Optional pause between rows
+        Application.Wait Now + TimeValue("0:00:01")
+    Next i
+    
+    MsgBox "SAP Update Completed for " & (lastRow - 1) & " records."
+End Sub
