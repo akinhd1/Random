@@ -1,62 +1,53 @@
 Option Explicit
 
-Sub UpdateSAP_FromExcel()
-    Dim SapGuiAuto As Object
-    Dim SAPApp As Object
-    Dim SAPCon As Object
-    Dim session As Object
-    Dim ws As Worksheet
-    Dim i As Long
-    Dim lastRow As Long
-    Dim vkorg As String, kunag As String, matnr As String
+Sub ExtractTablesFromOutlook()
+    Dim OutlookApp As Object
+    Dim OutlookNamespace As Object
+    Dim OutlookFolder As Object
+    Dim OutlookMail As Object
+    Dim HTMLDoc As Object
+    Dim TableElement As Object
+    Dim RowElement As Object
+    Dim CellElement As Object
+    Dim ExcelRow As Long
+    Dim ExcelCol As Long
     
-    ' Set your data sheet
-    Set ws = ThisWorkbook.Sheets("Sheet1")
+    ' Start row in Excel
+    ExcelRow = 2
     
-    ' Find last row in Column A
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    ' Connect to Outlook
+    Set OutlookApp = CreateObject("Outlook.Application")
+    Set OutlookNamespace = OutlookApp.GetNamespace("MAPI")
     
-    ' Connect to SAP
-    On Error Resume Next
-    Set SapGuiAuto = GetObject("SAPGUI")
-    If SapGuiAuto Is Nothing Then
-        MsgBox "Please make sure SAP is open and you are logged in."
-        Exit Sub
-    End If
-    On Error GoTo 0
+    ' 📌 Change "Supplier Replies" to your Outlook folder name
+    Set OutlookFolder = OutlookNamespace.Folders("YourEmail@domain.com").Folders("Inbox").Folders("Supplier Replies")
     
-    Set SAPApp = SapGuiAuto.GetScriptingEngine
-    Set SAPCon = SAPApp.Children(0)
-    Set session = SAPCon.Children(0)
+    ' Loop through each email
+    For Each OutlookMail In OutlookFolder.Items
+        If OutlookMail.Class = 43 Then ' 43 = MailItem
+            ' Load HTML body
+            Set HTMLDoc = CreateObject("HTMLFile")
+            HTMLDoc.body.innerHTML = OutlookMail.HTMLBody
+            
+            ' Find the first table
+            For Each TableElement In HTMLDoc.getElementsByTagName("table")
+                ' Loop through rows
+                For Each RowElement In TableElement.Rows
+                    ExcelCol = 1
+                    For Each CellElement In RowElement.Cells
+                        ThisWorkbook.Sheets(1).Cells(ExcelRow, ExcelCol).Value = Trim(CellElement.innerText)
+                        ExcelCol = ExcelCol + 1
+                    Next CellElement
+                    ExcelRow = ExcelRow + 1
+                Next RowElement
+                
+                ' Add a blank row between different mails
+                ExcelRow = ExcelRow + 1
+                
+                Exit For ' Take only first table from each mail
+            Next TableElement
+        End If
+    Next OutlookMail
     
-    ' Loop through each row
-    For i = 2 To lastRow ' Row 1 is header
-        vkorg = ws.Cells(i, "A").Value
-        kunag = ws.Cells(i, "B").Value
-        matnr = ws.Cells(i, "C").Value
-        
-        If vkorg = "" Or kunag = "" Or matnr = "" Then Exit For
-        
-        ' --- SAP Actions ---
-        session.findById("wnd[0]").resizeWorkingPane 185, 35, False
-        session.findById("wnd[0]/usr/ctxtKOMGK-VKORG").Text = vkorg
-        session.findById("wnd[0]/usr/ctxtKOMGK-KUNAG").Text = kunag
-        session.findById("wnd[0]/usr/ctxtKOMGK-KUNAG").SetFocus
-        session.findById("wnd[0]/usr/ctxtKOMGK-KUNAG").caretPosition = Len(kunag)
-        session.findById("wnd[0]").sendVKey 0
-        
-        session.findById("wnd[0]/usr/tblSAPMV13GCTRL_FAST_ENTRY/ctxtKOMGK-MATNR[0,0]").Text = matnr
-        session.findById("wnd[0]/usr/tblSAPMV13GCTRL_FAST_ENTRY/ctxtKOMGK-MATNR[0,0]").SetFocus
-        session.findById("wnd[0]/usr/tblSAPMV13GCTRL_FAST_ENTRY/ctxtKOMGK-MATNR[0,0]").caretPosition = Len(matnr)
-        
-        session.findById("wnd[0]").sendVKey 0
-        
-        ' Save - adjust this if your save button/menu differs
-        session.findById("wnd[0]/mbar/menu[0]/menu[1]").Select
-        
-        ' Optional pause between rows
-        Application.Wait Now + TimeValue("0:00:01")
-    Next i
-    
-    MsgBox "SAP Update Completed for " & (lastRow - 1) & " records."
+    MsgBox "✅ Done! Tables extracted to Excel."
 End Sub
