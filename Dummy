@@ -1,6 +1,6 @@
 Option Explicit
 
-Sub ExtractTablesFromOutlook()
+Sub ExtractSupplierTables()
     Dim OutlookApp As Object
     Dim OutlookNamespace As Object
     Dim OutlookFolder As Object
@@ -11,15 +11,17 @@ Sub ExtractTablesFromOutlook()
     Dim CellElement As Object
     Dim ExcelRow As Long
     Dim ExcelCol As Long
+    Dim HeaderText As String
+    Dim FoundValid As Boolean
     
-    ' Start row in Excel
+    ' Start pasting at row 2
     ExcelRow = 2
     
     ' Connect to Outlook
     Set OutlookApp = CreateObject("Outlook.Application")
     Set OutlookNamespace = OutlookApp.GetNamespace("MAPI")
     
-    ' 📌 Change "Supplier Replies" to your Outlook folder name
+    ' 📌 Change folder path as needed
     Set OutlookFolder = OutlookNamespace.Folders("YourEmail@domain.com").Folders("Inbox").Folders("Supplier Replies")
     
     ' Loop through each email
@@ -29,25 +31,46 @@ Sub ExtractTablesFromOutlook()
             Set HTMLDoc = CreateObject("HTMLFile")
             HTMLDoc.body.innerHTML = OutlookMail.HTMLBody
             
-            ' Find the first table
+            FoundValid = False
+            
+            ' Loop through all tables
             For Each TableElement In HTMLDoc.getElementsByTagName("table")
-                ' Loop through rows
-                For Each RowElement In TableElement.Rows
-                    ExcelCol = 1
-                    For Each CellElement In RowElement.Cells
-                        ThisWorkbook.Sheets(1).Cells(ExcelRow, ExcelCol).Value = Trim(CellElement.innerText)
-                        ExcelCol = ExcelCol + 1
-                    Next CellElement
-                    ExcelRow = ExcelRow + 1
-                Next RowElement
                 
-                ' Add a blank row between different mails
-                ExcelRow = ExcelRow + 1
-                
-                Exit For ' Take only first table from each mail
+                ' Check for minimum size
+                If TableElement.Rows.Length >= 2 And TableElement.Rows(0).Cells.Length >= 3 Then
+                    
+                    ' Grab header row
+                    HeaderText = LCase(Trim(TableElement.Rows(0).innerText))
+                    
+                    ' ✅ Check if header matches your table
+                    If InStr(HeaderText, "field") > 0 _
+                       And InStr(HeaderText, "current information") > 0 _
+                       And InStr(HeaderText, "changed") > 0 Then
+                        
+                        ' Found the correct table → copy into Excel
+                        For Each RowElement In TableElement.Rows
+                            ExcelCol = 1
+                            For Each CellElement In RowElement.Cells
+                                ThisWorkbook.Sheets(1).Cells(ExcelRow, ExcelCol).Value = Trim(CellElement.innerText)
+                                ExcelCol = ExcelCol + 1
+                            Next CellElement
+                            ExcelRow = ExcelRow + 1
+                        Next RowElement
+                        
+                        ExcelRow = ExcelRow + 1 ' gap between replies
+                        FoundValid = True
+                        Exit For ' only take first valid table
+                    End If
+                End If
             Next TableElement
+            
+            ' If no valid table found, log it
+            If Not FoundValid Then
+                ThisWorkbook.Sheets(1).Cells(ExcelRow, 1).Value = "⚠ No valid table found for: " & OutlookMail.SenderEmailAddress
+                ExcelRow = ExcelRow + 2
+            End If
         End If
     Next OutlookMail
     
-    MsgBox "✅ Done! Tables extracted to Excel."
+    MsgBox "✅ Done! All supplier tables extracted to Excel."
 End Sub
